@@ -83,11 +83,110 @@ def scoreEvaluationFunction(currentGameState: GameState):
         blocks_in_prev_row = blocks_in_row
 
     combo_mulitplier = 3
-    height_multiplier = 20
 
     return score + row_factor \
         + column_factor \
         + combo_mulitplier ** comboCount
+
+def topologicalEvalFunction(currentGameState: GameState):
+    piece = currentGameState.get_piece()
+    piece_loc = currentGameState.get_piece_loc()
+    score = currentGameState.get_score()
+    comboCount = currentGameState.get_combo_count()
+    queue = currentGameState.get_queue()
+    hold = currentGameState.get_hold()
+    board = currentGameState.get_board()
+    board_height = board.get_height()
+    board_width = board.get_width()
+
+    hard_drop_loc, _ = piece.hard_drop(board, piece_loc)
+    board_list = board.asList(piece, hard_drop_loc)
+
+    topology = list()
+
+    for c in range(board_width):
+        col = board_list[::-1][c]
+        height = 0
+        for r, val in enumerate(col):
+            if val != Board_View.Board_Values.EMPTY:
+                height = board_width - r
+                break
+        topology.append(height)
+
+    smallest = min(topology)
+    avg = (sum(topology) - smallest) / board_width - 1
+
+    topologyQuality = sum(((avg - col) for col in topology if col != smallest))
+
+    return score + 30 * topologyQuality
+
+def get_surrounding(grid):
+    return [grid.get_adj(dir) for dir in [Adj_Grid_Names.N,  Adj_Grid_Names.N_E, Adj_Grid_Names.E,
+                                          Adj_Grid_Names.S_E, Adj_Grid_Names.S, Adj_Grid_Names.S_W,
+                                          Adj_Grid_Names.W, Adj_Grid_Names.N_W]]
+
+def fitSnugEvalFunction(currentGameState: GameState):
+    piece = currentGameState.get_piece()
+    piece_loc = currentGameState.get_piece_loc()
+    score = currentGameState.get_score()
+    comboCount = currentGameState.get_combo_count()
+    queue = currentGameState.get_queue()
+    hold = currentGameState.get_hold()
+    board = currentGameState.get_board()
+    board_height = board.get_height()
+    board_width = board.get_width()
+
+    hard_drop_loc, _ = piece.hard_drop(board, piece_loc)
+    hard_drop_appendages = set(piece.get_appendages(hard_drop_loc))
+    board_list = board.asList(piece, hard_drop_loc)
+
+    surrounding_blocks = 0
+    for appendage in hard_drop_appendages:
+        for surrounding in get_surrounding(appendage):
+            if not surrounding in hard_drop_appendages and board[surrounding] != Board_View.Board_Values.EMPTY:
+                surrounding_blocks += 1
+    
+    return score + 25 * surrounding_blocks
+
+def testEvalFunction(currentGameState: GameState):
+    piece = currentGameState.get_piece()
+    piece_loc = currentGameState.get_piece_loc()
+    score = currentGameState.get_score()
+    comboCount = currentGameState.get_combo_count()
+    queue = currentGameState.get_queue()
+    hold = currentGameState.get_hold()
+    board = currentGameState.get_board()
+    board_height = board.get_height()
+    board_width = board.get_width()
+
+    hard_drop_loc, _ = piece.hard_drop(board, piece_loc)
+    hard_drop_appendages = set(piece.get_appendages(hard_drop_loc))
+    board_list = board.asList(piece, hard_drop_loc)
+
+    surrounding_blocks = 0
+    for appendage in hard_drop_appendages:
+        for surrounding in get_surrounding(appendage):
+            if not surrounding in hard_drop_appendages and board[surrounding] != Board_View.Board_Values.EMPTY:
+                surrounding_blocks += 1
+
+    topology = list()
+
+    for c in range(board_width):
+        col = board_list[::-1][c]
+        height = 0
+        for r, val in enumerate(col):
+            if val != Board_View.Board_Values.EMPTY:
+                height = board_width - r
+                break
+        topology.append(height)
+
+    smallest = min(topology)
+    avg = (sum(topology) - smallest) / board_width - 1
+
+    topologyQuality = sum(((avg - col) for col in topology if col != smallest))
+
+    return score + 30 * topologyQuality + 15 * surrounding_blocks
+    
 
 class ExpectimaxAgent(MultiAgentSearchAgent):
     """

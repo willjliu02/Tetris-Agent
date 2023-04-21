@@ -5,7 +5,7 @@ from game_agents import IdleMoveAgent, ExpectimaxAgent
 from keyboard_agent import KeyboardAgent
 
 # aiGame = Tetris(GameState(), Tetris_GUI(), PieceAgent())
-player = ExpectimaxAgent()
+player = ExpectimaxAgent("testEvalFunction")
 # player = KeyboardAgent()
 agents = [player, IdleMoveAgent()]
 game = Tetris(GameState(), Tetris_GUI(), agents)
