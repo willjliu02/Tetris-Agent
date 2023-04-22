@@ -111,7 +111,7 @@ class GameState:
         height = self.data.board.get_height()
 
         for grid in appendages:
-            if grid.r >= height:
+            if grid.r > height:
                 return True
         return False
 
@@ -230,7 +230,8 @@ class GameState:
         return self.data.queue[1:] + (next_piece_in_queue,)
 
     def _generate_next_piece(self):
-        return GAME_PIECES[randint(0, len(GAME_PIECES) - 1)]()    
+        piece = randint(0, len(GAME_PIECES) - 1)
+        return GAME_PIECES[piece]()    
 
     def is_game_over(self):
         return self.data.gameover

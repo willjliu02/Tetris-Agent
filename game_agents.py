@@ -2,7 +2,7 @@ from game_states import *
 from tetris_game import Controls, Agent, gravity_to_frames
 from util import Adj_Grid_Names, lookup
 from blocks import turn
-from time import time
+from time import time, sleep
 
 class MultiAgentSearchAgent(Agent):
     """
@@ -183,9 +183,16 @@ def testEvalFunction(currentGameState: GameState):
     smallest = min(topology)
     avg = (sum(topology) - smallest) / board_width - 1
 
-    topologyQuality = sum(((avg - col) for col in topology if col != smallest))
+    win_lose_points = 0
+    if currentGameState.is_game_over():
+        win_lose_points -= 10000
+    
+    print(topology)
+    # sleep(2)
 
-    return score + 30 * topologyQuality + 15 * surrounding_blocks
+    topologyQuality = sum(((smallest - col) ** 2 for col in topology))
+
+    return score - 10 * topologyQuality + 15 * surrounding_blocks + win_lose_points
     
 
 class ExpectimaxAgent(MultiAgentSearchAgent):
@@ -247,7 +254,8 @@ class IdleMoveAgent(MultiAgentSearchAgent):
 
     def getAction(self, state, agents):
         gravity_frames = gravity_to_frames(state.get_gravity())
-        gravity_frames = max(gravity_frames - self.frames_since_last_place if self.frames_since_last_place > 120 else 0, 1)
+        block_ttl = 140
+        gravity_frames = max(gravity_frames - (self.frames_since_last_place if self.frames_since_last_place > block_ttl else 0), 1)
 
         current_blocks_placed = state.get_num_blocks_placed()
 
@@ -259,14 +267,15 @@ class IdleMoveAgent(MultiAgentSearchAgent):
 
         if state.check_just_hard_dropped():
             self.frames_since_last = 1
+            self.frames_since_last = 1
 
         self.frames_since_last = ((self.frames_since_last) % gravity_frames) + 1
         self.frames_since_last_place += 1
 
-        if self.frames_since_last_place >= 120 and (Controls.HARD_DROP in state.getLegalActions()):
+        if self.frames_since_last_place >= block_ttl and (Controls.HARD_DROP in state.getLegalActions()):
             self.frames_since_last = 1
             action = Controls.HARD_DROP
-        if self.frames_since_last < gravity_frames:
+        elif self.frames_since_last < gravity_frames:
                 action = None
 
         return action

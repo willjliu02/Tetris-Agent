@@ -58,6 +58,11 @@ class Grid:
     
     def copy(self):
         return Grid(self.c, self.r)
+
+    def __eq__(self, __value: object) -> bool:
+        return isinstance(__value, Grid) and __value.get_points() == self.get_points()
+    def __hash__(self) -> int:
+        return hash((self.c, self.r))
     
 class Vector(Grid):
     def __init__(self, *values):

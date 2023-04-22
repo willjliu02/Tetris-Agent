@@ -31,7 +31,7 @@ class KeyboardAgent(Agent):
     def __init__( self):
 
         self.keys = []
-        self.click_time = 0.03
+        self.click_time = 0.075
         self.last_click_time = time()
         self.hard_drop_cool = False
         self.rotateL_drop_cool = False
