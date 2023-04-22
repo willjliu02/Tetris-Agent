@@ -30,7 +30,7 @@ class MultiAgentSearchAgent(Agent):
 def scoreEvaluationFunction(currentGameState: GameState):
     return currentGameState.get_score()
 
-def rowDepthEvaluationFunction(currentGameState: GameState):
+def holisticEvaluationFunction(currentGameState: GameState):
     piece = currentGameState.get_piece()
     piece_loc = currentGameState.get_piece_loc()
     score = currentGameState.get_score()
@@ -41,161 +41,98 @@ def rowDepthEvaluationFunction(currentGameState: GameState):
     board_height = board.get_height()
     board_width = board.get_width()
 
-    hard_drop_loc, _ = piece.hard_drop(board, piece_loc)
+    placed_board = board.asList(piece, piece_loc)
 
-    board_list = board.asList(piece, hard_drop_loc)
+    # Height Fell
+    copy = piece.copy()
+    copy.orientation = Block_Orientation.UP
+    start_location = board.get_piece_start_loc(copy)
 
-    highest_block = 0
-    holes_blocked = 0
-    column_factor = 0
-    for c in range(len(board_list[0])):
-        column = board_list[::-1][c]
-        count_holes = False
-        for r, val in enumerate(column):
-            if val != Board_View.Board_Values.EMPTY:
-                count_holes = True
-                highest_block = max(highest_block, r)
-                column_factor += 50
-            if count_holes:
-                if val == Board_View.Board_Values.EMPTY:
-                    holes_blocked += 1
-                    column_factor -= 60
+    height_dropped = piece_loc.get_points()[1] - start_location.get_points()[1]
 
-    row_holes_multiplier = [2 ** (board_height - i) for i in range(board_height)]
+    # Block and Line Clear
+    placed_board = board.asList(piece, piece_loc)
+    appendages = set(map(lambda grid: grid.get_points(), piece.get_appendages(piece_loc)))
 
-    row_factor = 0
-    filled_streak = 1
-    blocks_in_prev_row = board_width - 1
-    for r, row in enumerate(board_list[::-1]):
+    lines_cleared = 0
+    included_in_clear = 0
+    adjEmpty = 0 
+    rows_with_one_plus_holes = 0
+
+    for r, row in enumerate(placed_board):
         blocks_in_row = 0
-        emptys_in_row = 0
-
-        for val in row:
-            if val == Board_View.Board_Values.EMPTY:
-                emptys_in_row += 1
-            else:
+        blocks_from_piece = 0
+        for c, val, in enumerate(row):
+            if (c, r) in appendages:
+                blocks_from_piece += 1
+            if val != Board_View.Board_Values.EMPTY:
                 blocks_in_row += 1
 
-        prev_row_multiplier = (blocks_in_prev_row / (board_width - 1))
-        current_row_multiplier = (blocks_in_row / (board_width - 1))
+            # Adjacent Empty Blocks
+            if c == 0 and row[c] == Board_View.Board_Values.EMPTY:
+                adjEmpty += 1
+            elif row[c-1] != row[c]:
+                adjEmpty += 1
+            if c == board_width - 1 and row[c] == Board_View.Board_Values.EMPTY:
+                adjEmpty += 1
 
-        if emptys_in_row == 1:
-            filled_streak += 1
+        if blocks_in_row == board_width:
+            lines_cleared += 1
+            included_in_clear += blocks_from_piece
         else:
-            filled_streak = 1
+            rows_with_one_plus_holes += 1
 
-        row_factor += current_row_multiplier * row_holes_multiplier[r] * prev_row_multiplier * filled_streak
+    block_line_clear =  lines_cleared * included_in_clear
 
-        blocks_in_prev_row = blocks_in_row
-
-    combo_mulitplier = 3
-
-    return score + row_factor \
-        + column_factor \
-        + combo_mulitplier ** comboCount
-
-def topologicalEvalFunction(currentGameState: GameState):
-    piece = currentGameState.get_piece()
-    piece_loc = currentGameState.get_piece_loc()
-    score = currentGameState.get_score()
-    comboCount = currentGameState.get_combo_count()
-    queue = currentGameState.get_queue()
-    hold = currentGameState.get_hold()
-    board = currentGameState.get_board()
-    board_height = board.get_height()
-    board_width = board.get_width()
-
-    hard_drop_loc, _ = piece.hard_drop(board, piece_loc)
-    board_list = board.asList(piece, hard_drop_loc)
-
-    topology = list()
+    atopEmpty = 0
+    holes_blocked = 0
+    valleys = 0
+    num_blocks_covering = 0
 
     for c in range(board_width):
-        col = board_list[::-1][c]
-        height = 0
-        for r, val in enumerate(col):
-            if val != Board_View.Board_Values.EMPTY:
-                height = board_width - r
-                break
-        topology.append(height)
+        valley_depth = 0
+        is_hole_blocked = False
+        for r in range(board_height):
+            # Atop Empty Blocks
+            if r == 0 and placed_board[r][c] == Board_View.Board_Values.EMPTY:
+                atopEmpty += 1
+            elif placed_board[r - 1][c] != placed_board[r][c]:
+                atopEmpty += 1
+            if r == board_height - 1 and placed_board[r][c] == Board_View.Board_Values.EMPTY:
+                atopEmpty += 1
 
-    smallest = min(topology)
-    avg = (sum(topology) - smallest) / board_width - 1
+            # Holes Blocked
+            if r < board_height - 1 and placed_board[r][c] == Board_View.Board_Values.EMPTY and placed_board[r + 1][c] != Board_View.Board_Values.EMPTY:
+                holes_blocked += 1
 
-    topologyQuality = sum(((avg - col) for col in topology if col != smallest))
+            # Valley Depth
+            if r < board_height - 1 and placed_board[r][c] == Board_View.Board_Values.EMPTY:
+                is_valley = False
+                if c == 0 and placed_board[r][c + 1] != Board_View.Board_Values.EMPTY:
+                    is_valley = True
+                elif c == board_width - 1 and placed_board[r][c - 1] != Board_View.Board_Values.EMPTY:
+                    is_valley = True
+                elif placed_board[r][c - 1] != Board_View.Board_Values.EMPTY and placed_board[r][c + 1] != Board_View.Board_Values.EMPTY:
+                    is_valley = True
 
-    return score + 30 * topologyQuality
+                if is_valley:
+                    valley_depth += 1
+                    valleys += valley_depth
 
-def get_surrounding(grid):
-    return [grid.get_adj(dir) for dir in [Adj_Grid_Names.N,  Adj_Grid_Names.N_E, Adj_Grid_Names.E,
-                                          Adj_Grid_Names.S_E, Adj_Grid_Names.S, Adj_Grid_Names.S_W,
-                                          Adj_Grid_Names.W, Adj_Grid_Names.N_W]]
+            # Number of Blocks covering Holes
+            if is_hole_blocked and placed_board[r][c] != Board_View.Board_Values.EMPTY:
+                num_blocks_covering += 1
+            elif placed_board[r][c] == Board_View.Board_Values.EMPTY:
+                is_hole_blocked = True
 
-def fitSnugEvalFunction(currentGameState: GameState):
-    piece = currentGameState.get_piece()
-    piece_loc = currentGameState.get_piece_loc()
-    score = currentGameState.get_score()
-    comboCount = currentGameState.get_combo_count()
-    queue = currentGameState.get_queue()
-    hold = currentGameState.get_hold()
-    board = currentGameState.get_board()
-    board_height = board.get_height()
-    board_width = board.get_width()
+    factors = np.array([height_dropped, adjEmpty, rows_with_one_plus_holes, block_line_clear, 
+                        atopEmpty, holes_blocked, valleys, num_blocks_covering])
+    factorMultiplier  = np.array([0.1, 0.1, 0.1, 0.15, 
+                                  0.15, 0.15, 0.1, 0.15])
 
-    hard_drop_loc, _ = piece.hard_drop(board, piece_loc)
-    hard_drop_appendages = set(piece.get_appendages(hard_drop_loc))
-    board_list = board.asList(piece, hard_drop_loc)
+    stateQuality = np.dot(factors, factorMultiplier)
 
-    surrounding_blocks = 0
-    for appendage in hard_drop_appendages:
-        for surrounding in get_surrounding(appendage):
-            if not surrounding in hard_drop_appendages and board[surrounding] != Board_View.Board_Values.EMPTY:
-                surrounding_blocks += 1
-    
-    return score + 25 * surrounding_blocks
-
-def testEvalFunction(currentGameState: GameState):
-    piece = currentGameState.get_piece()
-    piece_loc = currentGameState.get_piece_loc()
-    score = currentGameState.get_score()
-    comboCount = currentGameState.get_combo_count()
-    queue = currentGameState.get_queue()
-    hold = currentGameState.get_hold()
-    board = currentGameState.get_board()
-    board_height = board.get_height()
-    board_width = board.get_width()
-
-    hard_drop_loc, _ = piece.hard_drop(board, piece_loc)
-    hard_drop_appendages = set(piece.get_appendages(hard_drop_loc))
-    board_list = board.asList(piece, hard_drop_loc)
-
-    surrounding_blocks = 0
-    for appendage in hard_drop_appendages:
-        for surrounding in get_surrounding(appendage):
-            if not surrounding in hard_drop_appendages and board[surrounding] != Board_View.Board_Values.EMPTY:
-                surrounding_blocks += 1
-
-    topology = list()
-
-    for c in range(board_width):
-        height = 0
-        for r in range(board_height-1, -1, -1):
-            if board_list[r][c] != Board_View.Board_Values.EMPTY:
-                height = r
-                break
-        topology.append(height)
-
-    smallest = max(min(topology), 1)
-    avg = (sum(topology) - smallest) / board_width - 1
-
-    win_lose_points = 0
-    if currentGameState.is_game_over():
-        win_lose_points -= 10000
-
-    topologyQuality = sum((((smallest - col) ** 2) * smallest for col in topology if abs(col - smallest) > 1))
-
-    return score - 10 * topologyQuality + 15 * surrounding_blocks + win_lose_points
-    
+    return stateQuality
 
 class ExpectimaxAgent(MultiAgentSearchAgent):
 
@@ -207,7 +144,7 @@ class ExpectimaxAgent(MultiAgentSearchAgent):
         legal moves.
         """
 
-        depth  = gameState.get_queue_size() * gameState.get_board_size()[1]
+        depth = gameState.get_queue_size() * gameState.get_board_size()[1]
         return self.expectimax(gameState, self.index, 2, agents)[1]
     
     def expectimax(self, gameState, agentIndex, depth, agents):
@@ -266,7 +203,7 @@ class IdleMoveAgent(MultiAgentSearchAgent):
 
         if state.check_just_hard_dropped():
             self.frames_since_last = 1
-            self.frames_since_last = 1
+            self.frames_since_last_place = 1
 
         self.frames_since_last = ((self.frames_since_last) % gravity_frames) + 1
         self.frames_since_last_place += 1
@@ -286,7 +223,8 @@ def scoreEvalFunction(currentGameState):
     return currentGameState.get_score()
 
 class QLearningAgent(MultiAgentSearchAgent):
-    def __init__(self):
+    def __init__(self, evalFn = 'scoreEvaluationFunction'):
+        super().__init__(evalFn)
         self.q_table = {}
 
     def getAction(self, gameState: GameState, agents):
@@ -303,24 +241,33 @@ class QLearningAgent(MultiAgentSearchAgent):
     
     def train(self, gameState):
         print("Training has Begun!")
-        alpha = 0.2
+        alpha = 0.1
         gamma = 0.8
-        epsilon = 0.1
+        epsilon = 0.5
 
         avg_level, avg_score = 0, 0
         total_time_per_decision = 0
         total_decisions = 0
 
-        runs = float(10)
+        runs = float(100)
+        minutes_per_run = 5
 
         for i in range(int(runs)):
-            print("--------------------------------------\nStarting run:", (i + 1))
+            print("-" * 30)
+            print("Starting run:", (i + 1))
+            gameState.setup()
             state = gameState.deepCopy()
             done = False
 
+            start_time_per_decision = total_time_per_decision
+            start_decision_count = total_decisions
             gameStartTime = time()
             while not done:
                 startTime = time()
+
+                if uniform(0, 1) < 0.25:
+                    state = state.getSuccessor(Controls.IDLE)
+
                 legalActions = state.getLegalActions()
                 if uniform(0, 1) < epsilon:
                     action = randint(0, len(legalActions) - 1) # Explore action space
@@ -330,8 +277,9 @@ class QLearningAgent(MultiAgentSearchAgent):
                 decision_time = time() - startTime
                 total_time_per_decision += decision_time
                 total_decisions += 1
-                next_state = gameState.getSuccessor(legalActions[action]) 
-                reward = next_state.get_score() - state.get_score()
+                action_to_take = legalActions[action]
+                next_state = state.getSuccessor(action_to_take) 
+                reward = self.evaluationFunction(next_state)
                 done = next_state.is_game_over()
                 
                 old_value = self._get_table_value(state)[action]
@@ -340,9 +288,9 @@ class QLearningAgent(MultiAgentSearchAgent):
                 new_value = (1 - alpha) * old_value + alpha * (reward + gamma * next_max)
                 self._get_table_value(state)[action] = new_value
 
-                state = next_state.getSuccessor(Controls.IDLE)
+                state = next_state
 
-                if startTime - gameStartTime >= 60 * 10:
+                if startTime - gameStartTime >= 60 * minutes_per_run:
                     break
 
             avg_level += float(state.get_level()) / runs
@@ -351,6 +299,7 @@ class QLearningAgent(MultiAgentSearchAgent):
             print("Finished run:", (i + 1))
             print("Run", (i+1), "level:", state.get_level())
             print("Run", (i+1), "score:", state.get_score())
+            print("Run", (i+1), "average move time:", ((total_time_per_decision - start_time_per_decision) / (total_decisions - start_decision_count)))
 
         print("Training has Finished!")
         print("Average Level:", avg_level)
@@ -359,5 +308,5 @@ class QLearningAgent(MultiAgentSearchAgent):
 
     def _get_table_value(self, state):
         if not state in self.q_table:
-            self.q_table[state] = np.zeros(8)
+            self.q_table[state] = np.zeros(len(state.getLegalActions()))
         return self.q_table[state]
