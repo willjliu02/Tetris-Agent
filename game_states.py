@@ -270,3 +270,6 @@ class GameState:
     
     def get_num_blocks_placed(self):
         return self.data.placed_blocks
+    
+    def __hash__(self) -> int:
+        return hash(self.data)

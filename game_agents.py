@@ -2,7 +2,10 @@ from game_states import *
 from tetris_game import Controls, Agent, gravity_to_frames
 from util import Adj_Grid_Names, lookup
 from blocks import turn
-from time import time, sleep
+from time import time
+import numpy as np
+from random import uniform
+from math import floor
 
 class MultiAgentSearchAgent(Agent):
     """
@@ -25,6 +28,9 @@ class MultiAgentSearchAgent(Agent):
         self.depth = int(depth)
 
 def scoreEvaluationFunction(currentGameState: GameState):
+    return currentGameState.get_score()
+
+def rowDepthEvaluationFunction(currentGameState: GameState):
     piece = currentGameState.get_piece()
     piece_loc = currentGameState.get_piece_loc()
     score = currentGameState.get_score()
@@ -172,33 +178,26 @@ def testEvalFunction(currentGameState: GameState):
     topology = list()
 
     for c in range(board_width):
-        col = board_list[::-1][c]
         height = 0
-        for r, val in enumerate(col):
-            if val != Board_View.Board_Values.EMPTY:
-                height = board_width - r
+        for r in range(board_height-1, -1, -1):
+            if board_list[r][c] != Board_View.Board_Values.EMPTY:
+                height = r
                 break
         topology.append(height)
 
-    smallest = min(topology)
+    smallest = max(min(topology), 1)
     avg = (sum(topology) - smallest) / board_width - 1
 
     win_lose_points = 0
     if currentGameState.is_game_over():
         win_lose_points -= 10000
-    
-    print(topology)
-    # sleep(2)
 
-    topologyQuality = sum(((smallest - col) ** 2 for col in topology))
+    topologyQuality = sum((((smallest - col) ** 2) * smallest for col in topology if abs(col - smallest) > 1))
 
     return score - 10 * topologyQuality + 15 * surrounding_blocks + win_lose_points
     
 
 class ExpectimaxAgent(MultiAgentSearchAgent):
-    """
-      Your expectimax agent (question 4)
-    """
 
     def getAction(self, gameState: GameState, agents):
         """
@@ -285,3 +284,80 @@ def betterEvaluationFunction(currentGameState: GameState):
 
 def scoreEvalFunction(currentGameState):
     return currentGameState.get_score()
+
+class QLearningAgent(MultiAgentSearchAgent):
+    def __init__(self):
+        self.q_table = {}
+
+    def getAction(self, gameState: GameState, agents):
+        """
+        Returns the expectimax action using self.depth and self.evaluationFunction
+
+        All ghosts should be modeled as choosing uniformly at random from their
+        legal moves.
+        """
+
+        #TODO: take the time before and after a successor is taken to evalutate for time.
+        legalActions = gameState.getLegalActions()
+        return legalActions[np.argmax(self._get_table_value(gameState))]
+    
+    def train(self, gameState):
+        print("Training has Begun!")
+        alpha = 0.2
+        gamma = 0.8
+        epsilon = 0.1
+
+        avg_level, avg_score = 0, 0
+        total_time_per_decision = 0
+        total_decisions = 0
+
+        runs = float(10)
+
+        for i in range(int(runs)):
+            print("--------------------------------------\nStarting run:", (i + 1))
+            state = gameState.deepCopy()
+            done = False
+
+            gameStartTime = time()
+            while not done:
+                startTime = time()
+                legalActions = state.getLegalActions()
+                if uniform(0, 1) < epsilon:
+                    action = randint(0, len(legalActions) - 1) # Explore action space
+                else:
+                    action = np.argmax(self._get_table_value(state)) # Exploit learned values
+                
+                decision_time = time() - startTime
+                total_time_per_decision += decision_time
+                total_decisions += 1
+                next_state = gameState.getSuccessor(legalActions[action]) 
+                reward = next_state.get_score() - state.get_score()
+                done = next_state.is_game_over()
+                
+                old_value = self._get_table_value(state)[action]
+                next_max = np.max(self._get_table_value(next_state))
+                
+                new_value = (1 - alpha) * old_value + alpha * (reward + gamma * next_max)
+                self._get_table_value(state)[action] = new_value
+
+                state = next_state.getSuccessor(Controls.IDLE)
+
+                if startTime - gameStartTime >= 60 * 10:
+                    break
+
+            avg_level += float(state.get_level()) / runs
+            avg_score += float(state.get_score()) / runs
+
+            print("Finished run:", (i + 1))
+            print("Run", (i+1), "level:", state.get_level())
+            print("Run", (i+1), "score:", state.get_score())
+
+        print("Training has Finished!")
+        print("Average Level:", avg_level)
+        print("Average Score:", avg_score)
+        print("Average Decision Time:", (total_time_per_decision / float(total_decisions)))
+
+    def _get_table_value(self, state):
+        if not state in self.q_table:
+            self.q_table[state] = np.zeros(8)
+        return self.q_table[state]

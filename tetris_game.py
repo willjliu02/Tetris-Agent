@@ -66,6 +66,10 @@ class GameStateData:
 
     def deepCopy(self):
         return GameStateData(self)
+    
+    def __hash__(self) -> int:
+        hashBoard = tuple((tuple(row) for row in self.board.asList(self.current_piece, self.current_piece_loc)))
+        return hash((self.hold, self.comboCount, self.queue, hashBoard, self.score, self.level))
 
 class Agent:
     """
@@ -123,5 +127,3 @@ class Tetris:
         print("Final Score:", self.game.get_score())
         print("Final Level:", self.game.get_level())
         self.view.close_graphics()
-
-        

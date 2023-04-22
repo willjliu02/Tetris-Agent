@@ -134,6 +134,8 @@ class T_Block(Block):
         return T_Block(self)
     def __eq__(self, __value: object) -> bool:
         return isinstance(__value, T_Block) and self.orientation == __value.orientation
+    def __hash__(self) -> int:
+        return hash((self.orientation, 1))
     
 class L_Block(Block):
     blocks_from_center = {Block_Orientation.UP: lambda grid: 
@@ -155,6 +157,8 @@ class L_Block(Block):
         return L_Block(self)
     def __eq__(self, __value: object) -> bool:
         return isinstance(__value, L_Block) and self.orientation == __value.orientation
+    def __hash__(self) -> int:
+        return hash((self.orientation, 2))
 
 class Rev_L_Block(Block):
     blocks_from_center = {Block_Orientation.UP: lambda grid: 
@@ -176,6 +180,8 @@ class Rev_L_Block(Block):
         return Rev_L_Block(self)
     def __eq__(self, __value: object) -> bool:
         return isinstance(__value, Rev_L_Block) and self.orientation == __value.orientation
+    def __hash__(self) -> int:
+        return hash((self.orientation, 3))
 
 class Square_Block(Block):
     '''
@@ -191,6 +197,8 @@ class Square_Block(Block):
         return Square_Block(self)
     def __eq__(self, __value: object) -> bool:
         return isinstance(__value, Square_Block) and self.orientation == __value.orientation
+    def __hash__(self) -> int:
+        return hash((self.orientation, 4))
 
 class S_Block(Block):
     blocks_from_center = {Block_Orientation.UP: lambda grid: 
@@ -212,6 +220,8 @@ class S_Block(Block):
         return S_Block(self)
     def __eq__(self, __value: object) -> bool:
         return isinstance(__value, S_Block) and self.orientation == __value.orientation
+    def __hash__(self) -> int:
+        return hash((self.orientation, 5))
 
 class Z_Block(Block):
     blocks_from_center = {Block_Orientation.UP: lambda grid: 
@@ -233,6 +243,8 @@ class Z_Block(Block):
         return Z_Block(self)
     def __eq__(self, __value: object) -> bool:
         return isinstance(__value, Z_Block) and self.orientation == __value.orientation
+    def __hash__(self) -> int:
+        return hash((self.orientation, 6))
 
 
 class Long_Block(Block):
@@ -285,3 +297,5 @@ class Long_Block(Block):
         return Long_Block(self)
     def __eq__(self, __value: object) -> bool:
         return isinstance(__value, Long_Block) and self.orientation == __value.orientation
+    def __hash__(self) -> int:
+        return hash((self.orientation, 7))
