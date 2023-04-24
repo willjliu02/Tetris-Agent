@@ -1,5 +1,5 @@
 from game_states import *
-from tetris_game import Controls, Agent, gravity_to_frames
+from tetris_game import Controls, Agent, gravity_to_time
 from util import Adj_Grid_Names, lookup
 from blocks import turn
 from time import time
@@ -33,15 +33,9 @@ def scoreEvaluationFunction(currentGameState: GameState):
 def holisticEvaluationFunction(currentGameState: GameState):
     piece = currentGameState.get_piece()
     piece_loc = currentGameState.get_piece_loc()
-    score = currentGameState.get_score()
-    comboCount = currentGameState.get_combo_count()
-    queue = currentGameState.get_queue()
-    hold = currentGameState.get_hold()
     board = currentGameState.get_board()
     board_height = board.get_height()
     board_width = board.get_width()
-
-    placed_board = board.asList(piece, piece_loc)
 
     # Height Fell
     copy = piece.copy()
@@ -134,6 +128,108 @@ def holisticEvaluationFunction(currentGameState: GameState):
 
     return stateQuality
 
+def moreEfficientHolisticEvaluationFunction(currentGameState: GameState):
+    piece = currentGameState.get_piece()
+    piece_loc = currentGameState.get_piece_loc()
+    board = currentGameState.get_board()
+    board_height = board.get_height()
+    board_width = board.get_width()
+
+    # Height Fell
+    copy = piece.copy()
+    copy.orientation = Block_Orientation.UP
+    start_location = board.get_piece_start_loc(copy)
+
+    height_dropped = piece_loc.get_points()[1] - start_location.get_points()[1]
+
+    # Block and Line Clear
+    placed_board = board.asList(piece, piece_loc)
+    np_board0 = board.get_np_able(piece, piece_loc)
+    np_board1 = [row[1:] + [1] for row in np_board0]
+    np_board2 = [[1] + row[:-1] for row in np_board0]
+    np_board3 = np_board0[1:] + [[0] * board_width]
+    np_board4 = [[0] * board_width] + np_board0[:-1]
+
+    np_board = np.array([np_board0, np_board1, np_board2, np_board3, np_board4])
+    appendages = map(lambda grid: grid.get_points(), piece.get_appendages(piece_loc))
+
+    included_in_clear = 0
+    rows_sum = np.sum(np_board[0], axis = 1)
+    full_lines = [rows_sum == board_width]
+    num_lines_cleared = int(np.sum(full_lines))
+    adjEmpty = int(board_height - np.sum(np_board[0], axis=0)[0] + np.sum([np_board[0] != np_board[1]]))
+    rows_with_one_plus_holes = int(np.sum([(rows_sum < board_width) & (rows_sum > 0)]))
+
+    cleared_rows = set(np.nonzero(full_lines)[1])
+
+    for block in appendages:
+        if block[1] in cleared_rows:
+            included_in_clear += 1
+
+    block_line_clear =  num_lines_cleared * included_in_clear
+
+    atopEmpty = int(board_width - np.sum(np_board[0], axis=1)[0]) + int(np.sum([np_board[0] != np_board[3]]))
+    holes_blocked = int(np.sum([(np_board[0] == 0) & (np_board[3] == 1)]))
+    valleys = 0
+    num_blocks_covering = int(np.sum(np.sum(np_board[0], axis = 0) - np.argmin(np_board[0], axis = 0)))
+
+    for c in range(board_width):
+        valley_depth = 0
+        for r in range(board_height - 1, -1, -1):
+            # Valley Depth
+            if r < board_height - 1 and placed_board[r][c] == Board_View.Board_Values.EMPTY:
+                is_valley = False
+                if c == 0 and placed_board[r][c + 1] != Board_View.Board_Values.EMPTY:
+                    is_valley = True
+                elif c == board_width - 1 and placed_board[r][c - 1] != Board_View.Board_Values.EMPTY:
+                    is_valley = True
+                elif placed_board[r][c - 1] != Board_View.Board_Values.EMPTY and placed_board[r][c + 1] != Board_View.Board_Values.EMPTY:
+                    is_valley = True
+
+                if is_valley:
+                    valley_depth += 1
+                    valleys += valley_depth
+            else:
+                break
+
+    factors = np.array([height_dropped, adjEmpty, rows_with_one_plus_holes, block_line_clear, 
+                        atopEmpty, holes_blocked, valleys, num_blocks_covering])
+    factorMultiplier  = np.array([1, 1, 1, 1, 
+                                  1, 1, 1, 1])
+
+    stateQuality = - np.dot(factors, factorMultiplier)
+
+    return stateQuality
+
+
+def worthCalculatingHeuristic(currentGameState: GameState):
+    piece = currentGameState.get_piece()
+    piece_loc = currentGameState.get_piece_loc()
+    board = currentGameState.get_board()
+    board_height = board.get_height()
+    board_width = board.get_width()
+
+    hard_drop_loc, _ = piece.hard_drop(board, piece_loc)
+
+    placed_board = board.asList(piece, hard_drop_loc)
+
+    blocks_placed = 0
+    num_blocks_covering = 0
+
+    for c in range(board_width):
+        is_hole_blocked = False
+        for r in range(board_height):
+            if placed_board[r][c] != Board_View.Board_Values.EMPTY:
+                blocks_placed += 1
+
+            if is_hole_blocked and placed_board[r][c] != Board_View.Board_Values.EMPTY:
+                num_blocks_covering += 1
+            elif placed_board[r][c] == Board_View.Board_Values.EMPTY:
+                is_hole_blocked = True
+
+    return num_blocks_covering / blocks_placed
+    
+
 class ExpectimaxAgent(MultiAgentSearchAgent):
 
     def getAction(self, gameState: GameState, agents):
@@ -182,18 +278,71 @@ class ExpectimaxAgent(MultiAgentSearchAgent):
 
         return (expected_value,)
     
+class SpeedExpectimaxAgent(MultiAgentSearchAgent):
+    def __init__(self, evalFn='scoreEvaluationFunction', speedHeuristic = "worthCalculatingHeuristic"):
+        super().__init__(evalFn)    
+        self.heuristic = lookup(speedHeuristic, globals())
+
+    def getAction(self, gameState: GameState, agents):
+        """
+        Returns the expectimax action using self.depth and self.evaluationFunction
+
+        All ghosts should be modeled as choosing uniformly at random from their
+        legal moves.
+        """
+
+        depth = gameState.get_queue_size() * gameState.get_board_size()[1]
+        return self.expectimax(gameState, self.index, 2, agents)[1]
+    
+    def expectimax(self, gameState, agentIndex, depth, agents):
+        if depth <= 0 or gameState.is_game_over():
+            return (self.evaluationFunction(gameState),)
+
+        if agentIndex == self.index:
+            return self.max_val(gameState, agentIndex, depth, agents)
+        else:
+            return self.exp_val(gameState, agentIndex, depth, agents)
+
+    def max_val(self, gameState, agentIndex, depth, agents):
+        next_agent = (agentIndex + 1) % len(agents)
+        next_depth = depth if next_agent else depth - 1
+        best_action = (-float("inf"), None)
+        evalFunc = max
+        
+        for action in gameState.getLegalActions():
+            successor = gameState.getSuccessor(action)
+
+            if self.heuristic(successor) < 0.8:
+                result = (self.expectimax(successor, next_agent, next_depth, agents)[0], action)
+                best_action = evalFunc(result, best_action, key = lambda successor: successor[0])
+
+        return best_action
+
+    def exp_val(self, gameState, agentIndex, depth, agents):
+        next_agent = (agentIndex + 1) % len(agents)
+        next_depth = depth if next_agent else depth - 1
+
+        expected_value = 0
+        idle_prob = 0.20
+        drop_prob = 0.01
+        for move, prob in [(None, 1 - (idle_prob + drop_prob)), (Controls.IDLE, idle_prob), (Controls.HARD_DROP, drop_prob)]:
+            successor = gameState.getSuccessor(move)
+            expected_value += prob * self.expectimax(successor, next_agent, next_depth, agents)[0]
+
+        return (expected_value,)
+    
 class IdleMoveAgent(MultiAgentSearchAgent):
     def __init__(self):
         super().__init__()
         self.index = 1
-        self.frames_since_last = 1
+        self.time_since_last = time()
         self.frames_since_last_place = 0
         self.num_blocks_placed = 0
 
     def getAction(self, state, agents):
-        gravity_frames = gravity_to_frames(state.get_gravity())
-        block_ttl = 140
-        gravity_frames = max(gravity_frames - (self.frames_since_last_place if self.frames_since_last_place > block_ttl else 0), 1)
+        current_time = time()
+        gravity_time = gravity_to_time(state.get_gravity())
+        block_ttl = 100
 
         current_blocks_placed = state.get_num_blocks_placed()
 
@@ -204,16 +353,16 @@ class IdleMoveAgent(MultiAgentSearchAgent):
         action = Controls.IDLE 
 
         if state.check_just_hard_dropped():
-            self.frames_since_last = 1
-            self.frames_since_last_place = 1
+            self.time_since_last = current_time
+            self.frames_since_last_place = 0
 
-        self.frames_since_last = ((self.frames_since_last) % gravity_frames) + 1
         self.frames_since_last_place += 1
 
         if self.frames_since_last_place >= block_ttl and (Controls.HARD_DROP in state.getLegalActions()):
-            self.frames_since_last = 1
+            self.frames_since_last_place = 1
+            self.time_since_last = current_time
             action = Controls.HARD_DROP
-        elif self.frames_since_last < gravity_frames:
+        elif current_time - self.time_since_last < gravity_time:
                 action = None
 
         return action

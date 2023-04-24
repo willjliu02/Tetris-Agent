@@ -6,7 +6,8 @@ from keyboard_agent import KeyboardAgent
 import pickle
 
 q_learning_file = "q_learning_agent 3.bin"
-evalFunc = "holisticEvaluationFunction"
+evalFunc = "moreEfficientHolisticEvaluationFunction"
+speedHeuristic = "holesBlockedEvalFunction"
 use_q_learning = False
 train = True
 
@@ -28,6 +29,7 @@ if use_q_learning:
             pickle.dump(player, f)
 else:
     player = ExpectimaxAgent(evalFunc)
+    # player = SpeedExpectimaxAgent(evalFunc)
     # player = KeyboardAgent()
 
 agents = [player, IdleMoveAgent()]

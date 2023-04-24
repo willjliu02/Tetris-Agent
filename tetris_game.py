@@ -11,8 +11,8 @@ class Controls(IntEnum):
     MOVE_RIGHT = 6
     HOLD = 7
 
-def gravity_to_frames(gravity):
-    return 5
+def gravity_to_time(gravity):
+    return 0.9
     
 class GameStateData:
     def __init__(self, prevState = None):

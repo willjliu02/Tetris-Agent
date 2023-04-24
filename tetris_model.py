@@ -196,6 +196,25 @@ class Board(Board_View):
 
         return board
     
+    def get_np_able(self, piece = None, loc = None):
+        if piece != None and loc != None:
+            piece_grids = set(map(lambda grid: grid.get_points(), piece.get_appendages(loc)))
+        else:
+            piece_grids = set()
+        board = list()
+        for r in range(self.get_height()):
+            board_row = list()
+            for c in range(self.get_width()):
+                grid = Grid(c, r)
+                if (c, r) in piece_grids:
+                    board_row.append(1)
+                else:
+                    board_row.append(1 if self[grid] != Board_View.Board_Values.EMPTY else 0)
+            board.append(board_row)
+
+        return board
+
+    
     def get_row(self, row):
         return self.board[row].copy()
     
