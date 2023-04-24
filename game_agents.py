@@ -79,7 +79,7 @@ def holisticEvaluationFunction(currentGameState: GameState):
         if blocks_in_row == board_width:
             lines_cleared += 1
             included_in_clear += blocks_from_piece
-        else:
+        elif blocks_in_row > 0:
             rows_with_one_plus_holes += 1
 
     block_line_clear =  lines_cleared * included_in_clear
@@ -127,10 +127,10 @@ def holisticEvaluationFunction(currentGameState: GameState):
 
     factors = np.array([height_dropped, adjEmpty, rows_with_one_plus_holes, block_line_clear, 
                         atopEmpty, holes_blocked, valleys, num_blocks_covering])
-    factorMultiplier  = np.array([0.1, 0.1, 0.1, 0.15, 
-                                  0.15, 0.15, 0.1, 0.15])
+    factorMultiplier  = np.array([1, 1, 1, 1, 
+                                  1, 1, 1, 1])
 
-    stateQuality = np.dot(factors, factorMultiplier)
+    stateQuality = - np.dot(factors, factorMultiplier)
 
     return stateQuality
 
@@ -172,11 +172,13 @@ class ExpectimaxAgent(MultiAgentSearchAgent):
     def exp_val(self, gameState, agentIndex, depth, agents):
         next_agent = (agentIndex + 1) % len(agents)
         next_depth = depth if next_agent else depth - 1
-        expected_value = 0
 
-        successor = gameState.getSuccessor(Controls.IDLE)
-            
-        expected_value = self.expectimax(successor, next_agent, next_depth, agents)[0]
+        expected_value = 0
+        idle_prob = 0.20
+        drop_prob = 0.01
+        for move, prob in [(None, 1 - (idle_prob + drop_prob)), (Controls.IDLE, idle_prob), (Controls.HARD_DROP, drop_prob)]:
+            successor = gameState.getSuccessor(move)
+            expected_value += prob * self.expectimax(successor, next_agent, next_depth, agents)[0]
 
         return (expected_value,)
     
@@ -237,36 +239,49 @@ class QLearningAgent(MultiAgentSearchAgent):
 
         #TODO: take the time before and after a successor is taken to evalutate for time.
         legalActions = gameState.getLegalActions()
-        return legalActions[np.argmax(self._get_table_value(gameState))]
+
+        if gameState in self.q_table:
+            action = legalActions[np.argmax(self._get_table_value(gameState))]
+        else:
+            action = legalActions[randint(0, len(legalActions) - 1)]
+        print(action)
+        return action
     
-    def train(self, gameState):
+    def train(self, gameState, track = False):
         print("Training has Begun!")
         alpha = 0.1
         gamma = 0.8
-        epsilon = 0.5
+        epsilon = 0.4
 
-        avg_level, avg_score = 0, 0
+        total_level, total_score = 0, 0
         total_time_per_decision = 0
         total_decisions = 0
+        total_runs = 0
 
-        runs = float(100)
+        runs = 2000
         minutes_per_run = 5
+        refresh_rate = 20
+
+        display_rate = refresh_rate
+
+        if track:
+            display_rate = 1
 
         for i in range(int(runs)):
-            print("-" * 30)
-            print("Starting run:", (i + 1))
-            gameState.setup()
+            if i % display_rate == 0:
+                print("-" * 30)
+                print("Starting run:", (i + 1))
+
+            if i % refresh_rate == 0:
+                gameState.setup()
+
             state = gameState.deepCopy()
             done = False
-
             start_time_per_decision = total_time_per_decision
             start_decision_count = total_decisions
             gameStartTime = time()
             while not done:
                 startTime = time()
-
-                if uniform(0, 1) < 0.25:
-                    state = state.getSuccessor(Controls.IDLE)
 
                 legalActions = state.getLegalActions()
                 if uniform(0, 1) < epsilon:
@@ -279,6 +294,10 @@ class QLearningAgent(MultiAgentSearchAgent):
                 total_decisions += 1
                 action_to_take = legalActions[action]
                 next_state = state.getSuccessor(action_to_take) 
+
+                if uniform(0, 1) < 0.4:
+                    next_state = next_state.getSuccessor(Controls.IDLE)
+
                 reward = self.evaluationFunction(next_state)
                 done = next_state.is_game_over()
                 
@@ -292,18 +311,25 @@ class QLearningAgent(MultiAgentSearchAgent):
 
                 if startTime - gameStartTime >= 60 * minutes_per_run:
                     break
+            
+            total_runs += 1
+            total_level += state.get_level()
+            total_score += state.get_score()
 
-            avg_level += float(state.get_level()) / runs
-            avg_score += float(state.get_score()) / runs
+            if i % display_rate == 0:
+                print("Finished run:", (i + 1))
+                if track:
+                    print("\nRun", (i+1), "level:", state.get_level())
+                    print("Run", (i+1), "score:", state.get_score())
+                    print("Run", (i+1), "average move time:", ((total_time_per_decision - start_time_per_decision) / (total_decisions - start_decision_count)))
+                else:
+                    print("Current Average Level:", (total_level / total_runs))
+                    print("Current Average Score:", (total_score / total_runs))
 
-            print("Finished run:", (i + 1))
-            print("Run", (i+1), "level:", state.get_level())
-            print("Run", (i+1), "score:", state.get_score())
-            print("Run", (i+1), "average move time:", ((total_time_per_decision - start_time_per_decision) / (total_decisions - start_decision_count)))
-
+        print("-" * 30)
         print("Training has Finished!")
-        print("Average Level:", avg_level)
-        print("Average Score:", avg_score)
+        print("Average Level:", (total_level / total_runs))
+        print("Average Score:", (total_score / total_runs))
         print("Average Decision Time:", (total_time_per_decision / float(total_decisions)))
 
     def _get_table_value(self, state):

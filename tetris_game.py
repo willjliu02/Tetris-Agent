@@ -69,7 +69,11 @@ class GameStateData:
     
     def __hash__(self) -> int:
         hashBoard = tuple((tuple(row) for row in self.board.asList(self.current_piece, self.current_piece_loc)))
-        return hash((self.hold, self.comboCount, self.queue, hashBoard, self.score, self.level))
+        topology = tuple(self.board.get_topology())
+        min_height = min(topology)
+        topology = tuple((height - min_height for height in topology))
+        hashed_items = (self.current_piece, self.current_piece_loc, topology)
+        return hash(hashed_items)
 
 class Agent:
     """
@@ -116,6 +120,8 @@ class Tetris:
             # Execute the action
             if not action is None:
                 self.move_history.append( action )
+                if self.agentIndex == 0:
+                    print(action)
 
             self.game = self.game.getSuccessor( action )
 

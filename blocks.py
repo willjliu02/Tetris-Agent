@@ -286,10 +286,11 @@ class Long_Block(Block):
             if new_pos:
                 break
 
-        if new_pos:
+        if not new_pos is None and new_pos.r == loc.r:
             self.orientation = new_orientation
+            return new_pos
 
-        return new_pos if new_pos else loc
+        return loc
     
     def get_appendages(self, to_grid, orientation = None):
         return Long_Block.blocks_from_center[orientation if orientation else self.orientation](to_grid)

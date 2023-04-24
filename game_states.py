@@ -40,7 +40,7 @@ class GameState:
         self.data.initialize(current_piece, piece_loc, queue, new_board, move_history)
 
     def getLegalActions(self):
-        moves = [Controls.IDLE]
+        moves = [None]
         if self.data.gameover:
             return moves
 
@@ -106,13 +106,13 @@ class GameState:
         return self.clear_lines().level_up().update_gravity().next_piece()
     
     def _check_gameover(self):
-        appendages = self.data.current_piece.get_appendages(self.data.current_piece_loc)
+        board_list = self.data.board.asList()
 
-        height = self.data.board.get_height()
-
-        for grid in appendages:
-            if grid.r > height:
+        top_row = board_list[-1]
+        for c in range(len(board_list[0])):
+            if top_row[c] != Board_View.Board_Values.EMPTY:
                 return True
+            
         return False
 
     def get_queue_size(self):

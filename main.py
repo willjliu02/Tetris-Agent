@@ -5,9 +5,9 @@ from game_agents import *
 from keyboard_agent import KeyboardAgent
 import pickle
 
-q_learning_file = "q_learning_agent.bin"
+q_learning_file = "q_learning_agent 3.bin"
 evalFunc = "holisticEvaluationFunction"
-use_q_learning = True
+use_q_learning = False
 train = True
 
 # aiGame = Tetris(GameState(), Tetris_GUI(), PieceAgent())
@@ -27,8 +27,9 @@ if use_q_learning:
         with open(q_learning_file, "wb") as f:
             pickle.dump(player, f)
 else:
-    # player = ExpectimaxAgent(evalFunc)
-    player = KeyboardAgent()
+    player = ExpectimaxAgent(evalFunc)
+    # player = KeyboardAgent()
+
 agents = [player, IdleMoveAgent()]
 game = Tetris(GameState(), Tetris_GUI(), agents)
 game.run()

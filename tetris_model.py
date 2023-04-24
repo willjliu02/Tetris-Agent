@@ -178,8 +178,11 @@ class Board(Board_View):
     def deepCopy(self):
         return Board(self.width, self.height, self.board)
     
-    def asList(self, piece, loc):
-        piece_grids = set(map(lambda grid: grid.get_points(), piece.get_appendages(loc)))
+    def asList(self, piece = None, loc = None):
+        if piece != None and loc != None:
+            piece_grids = set(map(lambda grid: grid.get_points(), piece.get_appendages(loc)))
+        else:
+            piece_grids = set()
         board = list()
         for r in range(self.get_height()):
             board_row = list()
@@ -195,3 +198,19 @@ class Board(Board_View):
     
     def get_row(self, row):
         return self.board[row].copy()
+    
+    def get_topology(self):
+        as_list = self.asList()
+        
+        topology = list()
+
+        for c in range(self.width):
+            height = 0
+            for r in range(self.get_height() - 1, 0, -1):
+                if as_list[r][c] != Board_View.Board_Values.EMPTY:
+                    height = r
+                    break
+            topology.append(height)
+
+        return topology
+
