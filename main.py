@@ -8,7 +8,7 @@ import pickle
 q_learning_file = "q_learning_agent 3.bin"
 evalFunc = "moreEfficientHolisticEvaluationFunction"
 speedHeuristic = "holesBlockedEvalFunction"
-use_q_learning = False
+use_q_learning = True
 train = True
 
 # aiGame = Tetris(GameState(), Tetris_GUI(), PieceAgent())
@@ -23,7 +23,7 @@ if use_q_learning:
     if train:
         #Training
         training_game = GameState()
-        player.train(training_game)
+        player.train(training_game, True)
 
         with open(q_learning_file, "wb") as f:
             pickle.dump(player, f)

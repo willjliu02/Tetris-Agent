@@ -10,6 +10,7 @@ class Controls(IntEnum):
     MOVE_LEFT = 5
     MOVE_RIGHT = 6
     HOLD = 7
+    PLACE = 8
 
 def gravity_to_time(gravity):
     return 0.9
@@ -30,9 +31,9 @@ class GameStateData:
             self.score = prevState.score
             self.current_piece_loc = prevState.current_piece_loc.copy()
             self.gravity = prevState.gravity
-            self.just_hard_dropped = prevState.just_hard_dropped
             self.placed_blocks = prevState.placed_blocks
             self.move_history = tuple(((piece.copy(), loc.copy()) for (piece, loc) in prevState.move_history))
+            self.can_place = prevState.can_place
             
         else:
             self.hold = None
@@ -48,9 +49,9 @@ class GameStateData:
             self.gameover = False
             self.current_piece_loc = None
             self.gravity = 1
-            self.just_hard_dropped = False
             self.placed_blocks = 0
             self.move_history = None
+            self.can_place = False
             
     def initialize(self, piece, piece_loc, queue, board = None, move_history = None):
         if not board is None:

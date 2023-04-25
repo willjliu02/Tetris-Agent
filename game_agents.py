@@ -201,7 +201,6 @@ def moreEfficientHolisticEvaluationFunction(currentGameState: GameState):
 
     return stateQuality
 
-
 def worthCalculatingHeuristic(currentGameState: GameState):
     piece = currentGameState.get_piece()
     piece_loc = currentGameState.get_piece_loc()
@@ -272,9 +271,14 @@ class ExpectimaxAgent(MultiAgentSearchAgent):
         expected_value = 0
         idle_prob = 0.20
         drop_prob = 0.01
-        for move, prob in [(None, 1 - (idle_prob + drop_prob)), (Controls.IDLE, idle_prob), (Controls.HARD_DROP, drop_prob)]:
-            successor = gameState.getSuccessor(move)
-            expected_value += prob * self.expectimax(successor, next_agent, next_depth, agents)[0]
+        
+        if gameState.check_can_place():
+            successor = gameState.getSuccessor([(1, Controls.PLACE)])
+            expected_value += self.expectimax(successor, next_agent, next_depth, agents)[0]
+        else:
+            for move, prob in [(None, 1 - (idle_prob + drop_prob)), (Controls.IDLE, idle_prob), (Controls.HARD_DROP, drop_prob)]:
+                successor = gameState.getSuccessor((1, move))
+                expected_value += prob * self.expectimax(successor, next_agent, next_depth, agents)[0]
 
         return (expected_value,)
     
@@ -325,9 +329,14 @@ class SpeedExpectimaxAgent(MultiAgentSearchAgent):
         expected_value = 0
         idle_prob = 0.20
         drop_prob = 0.01
-        for move, prob in [(None, 1 - (idle_prob + drop_prob)), (Controls.IDLE, idle_prob), (Controls.HARD_DROP, drop_prob)]:
-            successor = gameState.getSuccessor(move)
+        
+        if gameState.check_can_place():
+            successor = gameState.getSuccessor([(1, Controls.PLACE)])
             expected_value += prob * self.expectimax(successor, next_agent, next_depth, agents)[0]
+        else:
+            for move, prob in [(None, 1 - (idle_prob + drop_prob)), (Controls.IDLE, idle_prob), (Controls.HARD_DROP, drop_prob)]:
+                successor = gameState.getSuccessor((1, move))
+                expected_value += prob * self.expectimax(successor, next_agent, next_depth, agents)[0]
 
         return (expected_value,)
     
@@ -341,6 +350,11 @@ class IdleMoveAgent(MultiAgentSearchAgent):
 
     def getAction(self, state, agents):
         current_time = time()
+        if state.check_can_place():
+            self.time_since_last = current_time
+            self.frames_since_last_place = 0
+            return [(1, Controls.PLACE)]
+
         gravity_time = gravity_to_time(state.get_gravity())
         block_ttl = 100
 
@@ -350,11 +364,7 @@ class IdleMoveAgent(MultiAgentSearchAgent):
             self.frames_since_last_place = 0
             self.num_blocks_placed = current_blocks_placed
 
-        action = Controls.IDLE 
-
-        if state.check_just_hard_dropped():
-            self.time_since_last = current_time
-            self.frames_since_last_place = 0
+        action = Controls.IDLE
 
         self.frames_since_last_place += 1
 
@@ -365,7 +375,7 @@ class IdleMoveAgent(MultiAgentSearchAgent):
         elif current_time - self.time_since_last < gravity_time:
                 action = None
 
-        return action
+        return [(1, action)]
 
 def betterEvaluationFunction(currentGameState: GameState):
     return currentGameState.get_score()
@@ -393,7 +403,6 @@ class QLearningAgent(MultiAgentSearchAgent):
             action = legalActions[np.argmax(self._get_table_value(gameState))]
         else:
             action = legalActions[randint(0, len(legalActions) - 1)]
-        print(action)
         return action
     
     def train(self, gameState, track = False):
@@ -407,9 +416,9 @@ class QLearningAgent(MultiAgentSearchAgent):
         total_decisions = 0
         total_runs = 0
 
-        runs = 2000
-        minutes_per_run = 5
-        refresh_rate = 20
+        runs = 10
+        minutes_per_run = 3
+        refresh_rate = max(int(runs * 0.1), 20)
 
         display_rate = refresh_rate
 

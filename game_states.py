@@ -39,38 +39,146 @@ class GameState:
         self.update_gravity()
         self.data.initialize(current_piece, piece_loc, queue, new_board, move_history)
 
-    def getLegalActions(self):
-        moves = [None]
-        if self.data.gameover:
-            return moves
+    def _find_farthest_left(self, piece, orientation, loc):
+        farthest_left = Grid(0, loc.r)
 
-        piece = self.data.current_piece.copy()
-        pos = self.data.current_piece_loc.copy()
-        orientation = piece.orientation
-        board = self.data.board.deepCopy()
+        while not piece.can_move(self.data.board, farthest_left, orientation):
+            farthest_left = farthest_left.get_adj(Adj_Grid_Names.E)
 
-        if board._can_be_placed(piece, pos):
-            moves.append(Controls.HARD_DROP)
+        return loc.c - farthest_left.c
 
-        dirs = [Adj_Grid_Names.S, Adj_Grid_Names.W, Adj_Grid_Names.E]
-        controls = [Controls.SOFT_DROP, Controls.MOVE_LEFT, Controls.MOVE_RIGHT]
+    def _find_farthest_right(self, piece, orientation, loc):
+        farthest_right = Grid(self.data.board.get_width(), loc.r)
 
-        for dir, control in zip(dirs, controls):
-            new_pos = pos.get_adj(dir)
-            if board._can_be_placed(piece, new_pos) and not (piece, new_pos) in self.data.move_history:
-                moves.append(control)
+        while not piece.can_move(self.data.board, farthest_right, orientation):
+            farthest_right = farthest_right.get_adj(Adj_Grid_Names.W)
 
-        rotations = [Controls.ROTATE_LEFT, Controls.ROTATE_RIGHT]
-        for dir in rotations:
-            copy = piece.copy()
-            rotate = copy.rotate(board, pos, dir)
-            if board._can_be_placed(copy, rotate)  and not (copy, rotate) in self.data.move_history:
-                moves.append(dir)
+        return farthest_right.c - loc.c
+    
+    def _find_farther_turn(self, piece, orientation, loc, rotation):
+        new_orientation = turn(orientation, rotation)
+        if piece._can_rotate(self.data.board, loc, new_orientation, 0):
+            farthest_left = self._find_farthest_left(piece, new_orientation, loc)
+            farthest_right = self._find_farthest_right(piece, new_orientation, loc)
+            can_rotate, (farthest_left1, farthest_right1) = self._find_farther_turn(piece, new_orientation, loc, rotation)
+            return can_rotate + 1, (min(farthest_left, farthest_left1), min(farthest_right, farthest_right1))
+        return 0, (0, 0)
+
+    def _find_most_turns_left(self, piece, orientation, loc):
+        return self._find_farther_turn(piece, orientation, loc, Controls.ROTATE_LEFT)
+    
+    def _find_most_turns_right(self, piece, orientation, loc):
+        return self._find_farther_turn(piece, orientation, loc, Controls.ROTATE_RIGHT)
+
+    def _get_rotation_moves(self, left, right):
+        moves = []
         
-        if not self.data.just_held:
-            moves.append(Controls.HOLD)
+        for i in range(left):
+            moves.append((i, Controls.ROTATE_LEFT))
+
+        for i in range(1, right):
+            moves.append((i, Controls.ROTATE_RIGHT))
 
         return moves
+
+    def _get_left_right_moves(self, left, right):
+        moves = []
+
+        for i in range(left):
+            moves.append((i, Controls.MOVE_LEFT))
+
+        for i in range(1, right):
+            moves.append((i, Controls.MOVE_RIGHT))
+
+        return moves
+
+    def get_possible_moves(self, piece, piece_loc, piece_ori):
+        # if piece_loc
+        # TODO: add function to more easily add a variety of moves to items
+        '''
+            TODO: (order for rotation then move matters)
+            check if can move left and right : can't if farthest left/right == 0 (this is the end of recursion)
+            check if can rotate left or right : can't if farthest turn is 0 (180 == right * 2)
+                check farthest move left and right for each orientation
+                return (the number of turns, farther move: pos for right, neg for left; tuple if both)
+            if number of turns is less than it's supposed to left = 1 and right = 2:
+                then check secong arg then for moves >= that num, test again
+            add the rotation you can do to the list
+            add the moves you can do to the list (pass in second arg of rotations):
+                when moves is greater than the second arg, rerun check rotate, and re-add if necessary
+            check if there are caves (return height and farthest pertrusion):
+                add soft drop
+                recurse on each soft drop height
+            add hard drop for each and make the thing a tuple
+        '''
+        piece = self.data.current_piece
+        piece_loc = self.data.current_piece_loc
+        orientation = piece.orientation
+        move_left = self._find_farthest_left(piece, orientation, piece_loc)
+        move_right = self._find_farthest_right(piece, orientation, piece_loc)
+
+        if move_left == 0 and move_right == 0:
+            return []
+
+        rotate_right = self._find_farthest_right(piece, orientation, piece_loc)
+        rotate_left = self._find_farthest_left(piece, orientation, piece_loc)
+
+        moves = [(1, Controls.HOLD)]
+        for rotation in self._get_rotation_moves(rotate_left, rotate_right):
+            for left_right in self._get_left_right_moves(move_left, move_right):
+                moves.append([rotation, left_right])
+
+        # TODO: add what to do with caves
+
+        for move_set in moves:
+            move_set.append((1, Controls.HARD_DROP))
+
+        return moves
+
+    def getLegalActions(self):
+        '''
+            TODO:
+            - outputs (action, times to execute)
+            - only recurs on softdrop
+            - after recur, move left/right, and rotate left/right (with just varying numbers of executions)
+            - maybe have the number of softdrop execution # =  heights of topology? (at least, soft drop height)
+            - still needs to figure out how to consider a hard drop for all movements
+            - returns a list of actions, each element contains (action, times to execute action)
+        '''
+        return self.get_possible_moves(self.data.current_piece, self.data.current_piece_loc, self.data.current_piece.orientation)
+
+    # def getLegalActions(self):
+    #     moves = [None]
+    #     if self.data.gameover:
+    #         return moves
+
+    #     piece = self.data.current_piece.copy()
+    #     pos = self.data.current_piece_loc.copy()
+    #     orientation = piece.orientation
+    #     board = self.data.board.deepCopy()
+
+    #     if board._can_be_placed(piece, pos):
+    #         moves.append(Controls.HARD_DROP)
+
+    #     dirs = [Adj_Grid_Names.S, Adj_Grid_Names.W, Adj_Grid_Names.E]
+    #     controls = [Controls.SOFT_DROP, Controls.MOVE_LEFT, Controls.MOVE_RIGHT]
+
+    #     for dir, control in zip(dirs, controls):
+    #         new_pos = pos.get_adj(dir)
+    #         if board._can_be_placed(piece, new_pos) and not (piece, new_pos) in self.data.move_history:
+    #             moves.append(control)
+
+    #     rotations = [Controls.ROTATE_LEFT, Controls.ROTATE_RIGHT]
+    #     for dir in rotations:
+    #         copy = piece.copy()
+    #         rotate = copy.rotate(board, pos, dir)
+    #         if board._can_be_placed(copy, rotate)  and not (copy, rotate) in self.data.move_history:
+    #             moves.append(dir)
+        
+    #     if not self.data.just_held:
+    #         moves.append(Controls.HOLD)
+
+    #     return moves
 
     def update_gravity(self):
         self.data.gravity = level_to_gravity(self.data.level)
@@ -90,19 +198,36 @@ class GameState:
     def getSuccessor(self, action):
         successor = GameState(self)
 
-        if successor.data.just_hard_dropped:
-            successor.data.just_hard_dropped = False
-
-        if action is None:
+        if action[0][1] is None:
             return successor
 
-        return (successor.control_to_move[action](successor)).update_move_history()
+        if action[0][1] is Controls.PLACE:
+            return successor.place_piece()
+
+        for move in action:
+            times, control  = move
+            for i in range(times):
+                successor = (successor.control_to_move[control](successor)).update_move_history()
+
+        return successor
+
+    # def getSuccessor(self, action):
+    #     successor = GameState(self)
+
+    #     if action is Controls.PLACE:
+    #         return successor.place_piece()
+
+    #     if action is None:
+    #         return successor
+
+    #     return (successor.control_to_move[action](successor)).update_move_history()
     
     def place_piece(self):
         self.data.board.place_piece(self.data.current_piece, self.data.current_piece_loc)
         self.data.just_held = False
         self.data.placed_blocks += 1
         self.data.gameover = self._check_gameover()
+        self.data.can_place = False
         return self.clear_lines().level_up().update_gravity().next_piece()
     
     def _check_gameover(self):
@@ -122,11 +247,11 @@ class GameState:
         final_pos, blocks_dropped = self.data.current_piece.hard_drop(self.data.board, self.data.current_piece_loc)
         self.data.current_piece_loc = final_pos
         self.data.score += blocks_dropped * 2
-        self.data.just_hard_dropped = True
-        return self.place_piece()
+        self.data.can_place = True
+        return self
     
-    def check_just_hard_dropped(self):
-        return self.data.just_hard_dropped
+    def check_can_place(self):
+        return self.data.can_place
     
     def _move_dir(self, direction):
         old_loc = self.data.current_piece_loc
@@ -151,7 +276,7 @@ class GameState:
         if not self.is_piece_set():
             self.data.current_piece_loc = self._get_idle_move()
         else:
-            return self.place_piece()
+            self.data.can_place = True
         return self
 
     def is_piece_set(self):
