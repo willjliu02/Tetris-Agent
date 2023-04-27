@@ -40,35 +40,38 @@ class GameState:
         self.data.initialize(current_piece, piece_loc, queue, new_board, move_history)
 
     def _find_farthest_left(self, piece, orientation, loc):
-        farthest_left = Grid(0, loc.r)
+        farthest_left = loc
 
-        while not piece.can_move(self.data.board, farthest_left, orientation):
-            farthest_left = farthest_left.get_adj(Adj_Grid_Names.E)
+        while piece.can_move(self.data.board, farthest_left, orientation):
+            farthest_left = farthest_left.get_adj(Adj_Grid_Names.W)
 
         return loc.c - farthest_left.c
 
     def _find_farthest_right(self, piece, orientation, loc):
-        farthest_right = Grid(self.data.board.get_width(), loc.r)
+        farthest_right = loc
 
-        while not piece.can_move(self.data.board, farthest_right, orientation):
-            farthest_right = farthest_right.get_adj(Adj_Grid_Names.W)
+        while piece.can_move(self.data.board, farthest_right, orientation):
+            farthest_right = farthest_right.get_adj(Adj_Grid_Names.E)
 
         return farthest_right.c - loc.c
     
-    def _find_farther_turn(self, piece, orientation, loc, rotation):
+    def _find_farther_turn(self, piece, orientation, loc, rotation, depth):
+        if depth == 0:
+            return 0, (float("inf"), float("inf"))
+
         new_orientation = turn(orientation, rotation)
         if piece._can_rotate(self.data.board, loc, new_orientation, 0):
             farthest_left = self._find_farthest_left(piece, new_orientation, loc)
             farthest_right = self._find_farthest_right(piece, new_orientation, loc)
-            can_rotate, (farthest_left1, farthest_right1) = self._find_farther_turn(piece, new_orientation, loc, rotation)
+            can_rotate, (farthest_left1, farthest_right1) = self._find_farther_turn(piece, new_orientation, loc, rotation, depth - 1)
             return can_rotate + 1, (min(farthest_left, farthest_left1), min(farthest_right, farthest_right1))
         return 0, (0, 0)
 
     def _find_most_turns_left(self, piece, orientation, loc):
-        return self._find_farther_turn(piece, orientation, loc, Controls.ROTATE_LEFT)
+        return self._find_farther_turn(piece, orientation, loc, Controls.ROTATE_LEFT, 1)
     
     def _find_most_turns_right(self, piece, orientation, loc):
-        return self._find_farther_turn(piece, orientation, loc, Controls.ROTATE_RIGHT)
+        return self._find_farther_turn(piece, orientation, loc, Controls.ROTATE_RIGHT,  2)
 
     def _get_rotation_moves(self, left, right):
         moves = []
@@ -117,14 +120,14 @@ class GameState:
         move_left = self._find_farthest_left(piece, orientation, piece_loc)
         move_right = self._find_farthest_right(piece, orientation, piece_loc)
 
-        if move_left == 0 and move_right == 0:
-            return []
+        rotate_right = self._find_most_turns_right(piece, orientation, piece_loc)
+        rotate_left = self._find_most_turns_left(piece, orientation, piece_loc)
 
-        rotate_right = self._find_farthest_right(piece, orientation, piece_loc)
-        rotate_left = self._find_farthest_left(piece, orientation, piece_loc)
+        if move_left == 0 and move_right == 0 and rotate_right[0] == 0 and rotate_left[0] == 0:
+            return [[(1, None)]]
 
-        moves = [(1, Controls.HOLD)]
-        for rotation in self._get_rotation_moves(rotate_left, rotate_right):
+        moves = [[(1, Controls.HOLD)]]
+        for rotation in self._get_rotation_moves(rotate_left[0], rotate_right[0]):
             for left_right in self._get_left_right_moves(move_left, move_right):
                 moves.append([rotation, left_right])
 
@@ -331,16 +334,13 @@ class GameState:
         else:
             self.data.score += (num_cleared * 200 - 100 if num_cleared < 4 else 800) * self.data.level
             self.data.comboCount += 1
-            self.data.lines_cleared_on_lvl += 1
-
-        if self.data.just_held:
-            self.data.just_held = False
+            self.data.lines_cleared_on_lvl += num_cleared
 
         return self
     
     def level_up(self):
         if self.data.lines_cleared_on_lvl >= self.data.lines_to_clear_on_lvl:
-            self.data.lines_to_clear_on_lvl -= self.data.lines_to_clear_on_lvl
+            self.data.lines_cleared_on_lvl -= self.data.lines_to_clear_on_lvl
             self.data.level += 1
             self.data.lines_to_clear_on_lvl = get_level_line_clears(self.data.level)
             
@@ -388,6 +388,9 @@ class GameState:
     
     def get_queue(self):
         return tuple((piece.copy() for piece in self.data.queue))
+
+    def get_lines_till_next_level(self):
+        return self.data.lines_to_clear_on_lvl - self.data.lines_cleared_on_lvl
     
     def get_hold(self):
         hold = self.data.hold

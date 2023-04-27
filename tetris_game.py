@@ -69,11 +69,11 @@ class GameStateData:
         return GameStateData(self)
     
     def __hash__(self) -> int:
-        hashBoard = tuple((tuple(row) for row in self.board.asList(self.current_piece, self.current_piece_loc)))
+        hashBoard = tuple((tuple(row) for row in self.board.asList()))
         topology = tuple(self.board.get_topology())
         min_height = min(topology)
         topology = tuple((height - min_height for height in topology))
-        hashed_items = (self.current_piece, self.current_piece_loc, topology)
+        hashed_items = (self.current_piece, hashBoard, self.queue[0], self.hold)
         return hash(hashed_items)
 
 class Agent:
@@ -99,7 +99,6 @@ class Tetris:
         self.view = view
         self.catch_exception = catch_exception
         self.agents = agents
-        self.agentIndex = 0
         self.move_time = move_time
         self.move_history = list()
 
@@ -109,28 +108,47 @@ class Tetris:
         self.view.initialize()
 
         num_agent = len(self.agents)
+        agentIndex = 0
 
+        agents_actions = [[], []]
+        agents_action_marker = [0, 0]
+        agents_action_execution_times = [0, 0]
+
+        print("Game is Starting!")
+        action = None
         while not self.game.is_game_over():
             # Solicit an action
-            action = None
+            
             skip_action = False
             observation = self.game.deepCopy()
 
-            action = self.agents[self.agentIndex].getAction(observation, self.agents)
+            if agents_action_execution_times[agentIndex] == 0 and agents_action_marker[agentIndex] == len(agents_actions[agentIndex]):
+                agents_actions[agentIndex] = self.agents[agentIndex].getAction(observation, self.agents)
+                agents_action_execution_times[agentIndex] = 0
+                agents_action_marker[agentIndex] = 0
+                action = agents_actions[agentIndex][agents_action_marker[agentIndex]]
+                while action[0] == 0:
+                    agents_action_marker[agentIndex] += 1
+                    action = agents_actions[agentIndex][agents_action_marker[agentIndex]]
+                
+            action = agents_actions[agentIndex][agents_action_marker[agentIndex]]
+            agents_action_execution_times[agentIndex] += 1
+            if agents_action_execution_times[agentIndex] >= action[0]:
+                agents_action_execution_times[agentIndex] = 0
+                agents_action_marker[agentIndex] += 1
 
             # Execute the action
-            if not action is None:
-                self.move_history.append( action )
-                if self.agentIndex == 0:
-                    print(action)
+            if not action[1] is None:
+                self.move_history.append( action[1] )
 
-            self.game = self.game.getSuccessor( action )
+            self.game = self.game.getSuccessor( [(1, action[1])] )
 
             # Change the display
             self.view.update( self.game )
 
-            self.agentIndex = (self.agentIndex + 1) % num_agent
+            agentIndex = (agentIndex + 1) % num_agent
 
+        print("Game Over!")
         print("Final Score:", self.game.get_score())
         print("Final Level:", self.game.get_level())
         self.view.close_graphics()
